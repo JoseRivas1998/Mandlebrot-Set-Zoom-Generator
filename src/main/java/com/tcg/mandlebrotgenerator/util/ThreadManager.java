@@ -2,12 +2,19 @@ package com.tcg.mandlebrotgenerator.util;
 
 import com.tcg.mandlebrotgenerator.mandlebrot.MandlebrotZoomParams;
 import com.tcg.mandlebrotgenerator.mandlebrot.MandlebrotZoomThread;
+import javafx.application.Platform;
+import javafx.geometry.Insets;
+import javafx.scene.control.Label;
+import javafx.scene.control.ProgressBar;
+import javafx.scene.layout.GridPane;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.VBox;
 
 import java.io.File;
 import java.util.ArrayDeque;
 import java.util.Queue;
 
-public class ThreadManager {
+public class ThreadManager extends GridPane {
 
     private Queue<MandlebrotZoomParams> mandlebrotZoomParamsQueue;
     private double centerX;
@@ -18,10 +25,25 @@ public class ThreadManager {
     private int numFrames;
     private String directory;
 
-    private static final int NUM_THREADS = 4;
+    private int completeThreads;
+
+    private final int NUM_THREADS;
     private MandlebrotZoomThread[] threads;
 
+    private ProgressBar[] progressBars;
+    private Label[] imageNumbers;
+    private ProgressBar completeProgressBar;
+    private Label completeProgressLabel;
+
+    long startTime;
+
     public ThreadManager(double centerX, double centerY, double initialRealSize, double sizeScale, int iterations, String directory, int numFrames) {
+        this(3 * Runtime.getRuntime().availableProcessors() / 4, centerX, centerY, initialRealSize, sizeScale, iterations, directory, numFrames);
+    }
+
+    public ThreadManager(int numThreads, double centerX, double centerY, double initialRealSize, double sizeScale, int iterations, String directory, int numFrames) {
+        super();
+        this.NUM_THREADS = numThreads;
         this.centerX = centerX;
         this.centerY = centerY;
         this.initialRealSize = initialRealSize;
@@ -29,11 +51,41 @@ public class ThreadManager {
         this.iterations = iterations;
         this.directory = directory + File.separator;
         this.numFrames = numFrames;
+        this.completeThreads = 0;
+
+        startTime = System.currentTimeMillis();
+
+        setHgap(5);
+        setVgap(5);
+        setPadding(new Insets(10));
+
+        initProgressBars();
         generateQueue();
         threads = new MandlebrotZoomThread[NUM_THREADS];
+    }
+
+    public void start() {
         for (int i = 0; i < NUM_THREADS; i++) {
             dequeueAndRun(i);
         }
+    }
+
+    private void initProgressBars() {
+        progressBars = new ProgressBar[NUM_THREADS];
+        imageNumbers = new Label[NUM_THREADS];
+        for (int i = 0; i < NUM_THREADS; i++) {
+            progressBars[i] = new ProgressBar();
+            imageNumbers[i] = new Label("Image 000");
+            add(new Label("Thread " + i), 0, i);
+            add(progressBars[i], 1, i);
+            add(imageNumbers[i], 2, i);
+        }
+        completeProgressLabel = new Label();
+        completeProgressBar = new ProgressBar();
+        updateCompleteProgressBar();
+        add(new Label("Overall:"), 0, NUM_THREADS);
+        add(completeProgressBar, 1, NUM_THREADS);
+        add(completeProgressLabel, 2, NUM_THREADS);
     }
 
     private void generateQueue() {
@@ -53,20 +105,58 @@ public class ThreadManager {
     }
 
     private void dequeueAndRun(int index) {
-        if(mandlebrotZoomParamsQueue.isEmpty()) return;
+        if (mandlebrotZoomParamsQueue.isEmpty()) {
+            completeThreads++;
+            return;
+        }
         MandlebrotZoomParams params = mandlebrotZoomParamsQueue.remove();
-        System.out.printf("Enqueuing image %d into thread %d, queue size: %d\n", params.fileNum, index, mandlebrotZoomParamsQueue.size());
+        if(params.fileNum == 50) {
+            double time = System.currentTimeMillis() - startTime;
+            time /= 1000;
+            System.out.println("Time to 50: " + time);
+        }
         MandlebrotZoomThread mandThread = new MandlebrotZoomThread(index, params);
         mandThread.setZoomCompletion(thread -> {
-            System.out.printf("Thread %d is done!\n", thread.id);
             dequeueAndRun(thread.id);
+            updateCompleteProgressBar();
         });
         mandThread.setOnPostProgress(thread -> {
-            double percentage = ((double) thread.getPixelsComplete() / thread.getTotalPixels()) * 100;
-//            System.out.printf("%d: %.2f%%\n", thread.id, percentage);
+            updateProgressBar(thread.id);
         });
         threads[index] = mandThread;
+        updateImageLabel(index, params.fileNum);
         mandThread.start();
+    }
+
+    private void updateImageLabel(int index, int fileNum) {
+        Platform.runLater(() -> {
+            imageNumbers[index].setText(String.format("Image %03d", fileNum));
+        });
+    }
+
+    public void updateProgressBar(int index) {
+        Platform.runLater(() -> {
+            MandlebrotZoomThread zoomThread = threads[index];
+            progressBars[index].progressProperty().setValue(
+                    ((double) zoomThread.getPixelsComplete() / zoomThread.getTotalPixels())
+            );
+        });
+    }
+
+    private void updateCompleteProgressBar() {
+        Platform.runLater(() -> {
+            int workingThreads = NUM_THREADS - completeThreads;
+            double framesCompleted = this.numFrames - mandlebrotZoomParamsQueue.size() - workingThreads;
+            completeProgressBar.setProgress(framesCompleted / this.numFrames);
+            completeProgressLabel.setText(String.format("%d/%d", Math.max((int) framesCompleted, 0), this.numFrames));
+        });
+    }
+
+    public void stopAll() {
+        for (int i = 0; i < NUM_THREADS; i++) {
+            threads[i].stopZoom();
+        }
+        mandlebrotZoomParamsQueue.clear();
     }
 
 }

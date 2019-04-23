@@ -36,6 +36,8 @@ public class MandlebrotZoomThread extends Thread {
 
     private WritableImage wim;
 
+    private boolean stop;
+
     public MandlebrotZoomThread(int id, MandlebrotZoomParams mandlebrotZoomParams) {
         this.id = id;
         this.pixelWidth = mandlebrotZoomParams.width;
@@ -48,6 +50,7 @@ public class MandlebrotZoomThread extends Thread {
         this.directory = mandlebrotZoomParams.directory;
         this.zeroColor = mandlebrotZoomParams.zeroColor;
         this.endColor = mandlebrotZoomParams.endColor;
+        this.stop = false;
 
         wim = new WritableImage(this.pixelWidth, this.pixelHeight);
 
@@ -66,26 +69,32 @@ public class MandlebrotZoomThread extends Thread {
 
     @Override
     public void run() {
-        for (int x = 0; x < pixelWidth; x++) {
-            for (int y = 0; y < pixelHeight; y++) {
+        for (int x = 0; x < pixelWidth && !stop; x++) {
+            for (int y = 0; y < pixelHeight && !stop; y++) {
                 ComplexNumber z0 = Helpers.mapPixel(x, y, pixelWidth, pixelHeight, centerX, centerY, realSize);
 
                 int mandlebrot = mandlebrot(z0, iterations);
                 Color color = zeroColor.interpolate(endColor, (double) mandlebrot / iterations);
                 wim.getPixelWriter().setColor(x, y, color);
                 pixelsComplete++;
-                if(onPostProgress != null) onPostProgress.act(this);
+            }
+            if(onPostProgress != null) onPostProgress.act(this);
+        }
+        if(!stop) {
+            try {
+                File imageFile = new File(directory + String.format("%03d.png", fileNum));
+                ImageIO.write(SwingFXUtils.fromFXImage(wim, null), "png", imageFile);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+            if (zoomCompletion != null) {
+                zoomCompletion.act(this);
             }
         }
-        try {
-            File imageFile = new File(directory + String.format("%03d.png", fileNum));
-            ImageIO.write(SwingFXUtils.fromFXImage(wim, null), "png", imageFile);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        if(zoomCompletion != null) {
-            zoomCompletion.act(this);
-        }
+    }
+
+    public void stopZoom() {
+        this.stop = true;
     }
 
     private static int mandlebrot(ComplexNumber z0, int maxIterations) {
