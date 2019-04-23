@@ -69,6 +69,7 @@ public class MandlebrotZoomThread extends Thread {
         for (int x = 0; x < pixelWidth; x++) {
             for (int y = 0; y < pixelHeight; y++) {
                 ComplexNumber z0 = Helpers.mapPixel(x, y, pixelWidth, pixelHeight, centerX, centerY, realSize);
+
                 int mandlebrot = mandlebrot(z0, iterations);
                 Color color = zeroColor.interpolate(endColor, (double) mandlebrot / iterations);
                 wim.getPixelWriter().setColor(x, y, color);

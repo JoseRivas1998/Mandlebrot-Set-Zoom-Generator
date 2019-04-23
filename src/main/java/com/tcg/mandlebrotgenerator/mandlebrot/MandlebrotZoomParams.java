@@ -4,8 +4,8 @@ import javafx.scene.paint.Color;
 
 public final class MandlebrotZoomParams {
 
-    public int width = 1000;
-    public int height = 1000;
+    public int width = 2000;
+    public int height = 2000;
     public int iterations = 1000;
 
     public double centerX = 0;
