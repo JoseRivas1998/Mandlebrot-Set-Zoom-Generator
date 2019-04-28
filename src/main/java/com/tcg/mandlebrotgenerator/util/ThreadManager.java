@@ -4,6 +4,7 @@ import com.tcg.mandlebrotgenerator.mandlebrot.MandlebrotZoomParams;
 import com.tcg.mandlebrotgenerator.mandlebrot.MandlebrotZoomThread;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
+import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressBar;
 import javafx.scene.layout.GridPane;
@@ -37,13 +38,15 @@ public class ThreadManager extends GridPane {
 
     long startTime;
 
+    private ZoomCompeteListener zoomCompeteListener;
+
     public ThreadManager(double centerX, double centerY, double initialRealSize, double sizeScale, int iterations, String directory, int numFrames) {
         this(3 * Runtime.getRuntime().availableProcessors() / 4, centerX, centerY, initialRealSize, sizeScale, iterations, directory, numFrames);
     }
 
     public ThreadManager(int numThreads, double centerX, double centerY, double initialRealSize, double sizeScale, int iterations, String directory, int numFrames) {
         super();
-        this.NUM_THREADS = numThreads;
+        this.NUM_THREADS = Math.min(numThreads, numFrames);
         this.centerX = centerX;
         this.centerY = centerY;
         this.initialRealSize = initialRealSize;
@@ -61,6 +64,15 @@ public class ThreadManager extends GridPane {
 
         initProgressBars();
         generateQueue();
+
+        Button cancel = new Button();
+        cancel.setOnAction(event -> {
+            stopAll();
+            if(zoomCompeteListener != null) {
+                zoomCompeteListener.onComplete(this, true);
+            }
+        });
+
         threads = new MandlebrotZoomThread[NUM_THREADS];
     }
 
@@ -107,10 +119,16 @@ public class ThreadManager extends GridPane {
     private void dequeueAndRun(int index) {
         if (mandlebrotZoomParamsQueue.isEmpty()) {
             completeThreads++;
+            if(completeThreads == NUM_THREADS) {
+                if(zoomCompeteListener != null){
+                    System.out.println("Test");
+                    Platform.runLater(() -> zoomCompeteListener.onComplete(this, false));
+                }
+            }
             return;
         }
         MandlebrotZoomParams params = mandlebrotZoomParamsQueue.remove();
-        if(params.fileNum == 50) {
+        if (params.fileNum == 50) {
             double time = System.currentTimeMillis() - startTime;
             time /= 1000;
             System.out.println("Time to 50: " + time);
@@ -157,6 +175,15 @@ public class ThreadManager extends GridPane {
             threads[i].stopZoom();
         }
         mandlebrotZoomParamsQueue.clear();
+    }
+
+    public void setZoomCompeteListener(ZoomCompeteListener zoomCompeteListener) {
+        this.zoomCompeteListener = zoomCompeteListener;
+    }
+
+    @FunctionalInterface
+    public interface ZoomCompeteListener {
+        void onComplete(ThreadManager threadManager, boolean canceled);
     }
 
 }

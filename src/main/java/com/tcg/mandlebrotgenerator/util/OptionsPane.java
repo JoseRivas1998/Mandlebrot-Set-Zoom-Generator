@@ -5,6 +5,9 @@ import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
 import javafx.scene.layout.GridPane;
+import javafx.stage.DirectoryChooser;
+
+import java.io.File;
 
 public class OptionsPane extends GridPane {
 
@@ -19,6 +22,9 @@ public class OptionsPane extends GridPane {
 
     private TextField initialRealSizeField;
     private double initialRealSize;
+
+    private TextField sizeScaleField;
+    private double sizeScale;
 
     private TextField iterationsField;
     private int iterations;
@@ -38,16 +44,23 @@ public class OptionsPane extends GridPane {
         initCenterXField();
         initCenterYField();
         initInitialRealSizeField();
+        initSizeScaleField();
         initIterationsField();
         initNumFramesField();
 
         Button button = new Button("Start");
         button.setOnAction(event -> {
             if(onPress != null) {
-                onPress.onStartPress(this.threads, this.centerX, this.centerY, this.initialRealSize, this.iterations, this.numFrames, "test");
+                DirectoryChooser directoryChooser = new DirectoryChooser();
+                File folder = directoryChooser.showDialog(null);
+                if(folder != null && folder.exists()) {
+                    onPress.onStartPress(this.threads, this.centerX, this.centerY, this.initialRealSize, this.sizeScale, this.iterations, this.numFrames, folder.getAbsolutePath());
+                } else {
+                    System.out.println("ERROR");
+                }
             }
         });
-        add(button, 0, 6);
+        add(button, 0, 7);
     }
 
     private void initNumFramesField() {
@@ -64,8 +77,8 @@ public class OptionsPane extends GridPane {
                 this.numFrames = 100;
             }
         });
-        add(new Label("Number of Frames:"), 0 , 5);
-        add(numFramesField, 1, 5);
+        add(new Label("Number of Frames:"), 0 , 6);
+        add(numFramesField, 1, 6);
     }
 
     private void initIterationsField() {
@@ -82,8 +95,26 @@ public class OptionsPane extends GridPane {
                 this.iterations = 255;
             }
         });
-        add(new Label("Iterations:"), 0 , 4);
-        add(iterationsField, 1, 4);
+        add(new Label("Iterations:"), 0 , 5);
+        add(iterationsField, 1, 5);
+    }
+
+    private void initSizeScaleField() {
+        this.sizeScale = 1;
+        this.sizeScaleField = new TextField(String.valueOf(sizeScale));
+        this.sizeScaleField.textProperty().addListener((observable, oldValue, newValue) -> {
+            if(!newValue.isEmpty()) {
+                try {
+                    this.sizeScale = Double.parseDouble(newValue);
+                } catch (NumberFormatException ignored){
+                }
+                this.sizeScaleField.setText(String.valueOf(this.sizeScale));
+            } else {
+                this.sizeScale = 1;
+            }
+        });
+        add(new Label("Size Scale:"), 0 , 4);
+        add(sizeScaleField, 1, 4);
     }
 
     private void initInitialRealSizeField() {
@@ -164,7 +195,7 @@ public class OptionsPane extends GridPane {
 
     @FunctionalInterface
     public interface OnStartPressListener {
-        void onStartPress(int threads, double centerX, double centerY, double initialRealSize, int iterations, int numFrames, String directory);
+        void onStartPress(int threads, double centerX, double centerY, double initialRealSize, double sizeScale, int iterations, int numFrames, String directory);
     }
 
 }
